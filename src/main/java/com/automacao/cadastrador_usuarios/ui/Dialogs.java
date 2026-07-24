@@ -18,20 +18,6 @@ public class Dialogs {
                 JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, botoesModo, botoesModo[0]);
     }
 
-    public int escolherModoVinculo() {
-        Object[] opcoes = {"🤖 Robô vincular", "✋ Vou vincular manualmente", "⏭️ Pular vínculo agora"};
-        return JOptionPane.showOptionDialog(
-                null,
-                "Cadastros finalizados.\nComo você quer fazer o vínculo das obras?",
-                "Vínculo de Obras",
-                JOptionPane.DEFAULT_OPTION,
-                JOptionPane.QUESTION_MESSAGE,
-                null,
-                opcoes,
-                opcoes[0]
-        );
-    }
-
     public void info(String msg) {
         JOptionPane.showMessageDialog(null, msg);
     }

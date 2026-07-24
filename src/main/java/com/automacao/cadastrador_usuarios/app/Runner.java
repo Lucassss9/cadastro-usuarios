@@ -1,16 +1,11 @@
 package com.automacao.cadastrador_usuarios.app;
 
-import com.automacao.cadastrador_usuarios.domain.BaseState;
-import com.automacao.cadastrador_usuarios.domain.FilialObrasCatalog;
-import com.automacao.cadastrador_usuarios.flow.CadastroPageFlow;
-import com.automacao.cadastrador_usuarios.flow.VinculoObrasFlow;
-import com.automacao.cadastrador_usuarios.infra.ExcelImporter;
-import com.automacao.cadastrador_usuarios.infra.ReportService;
-import com.automacao.cadastrador_usuarios.selenium.DriverFactory;
+import com.automacao.cadastrador_usuarios.page.CadastroPage;
+import com.automacao.cadastrador_usuarios.util.ExcelImporter;
+import com.automacao.cadastrador_usuarios.util.ReportService;
+import com.automacao.cadastrador_usuarios.util.DriverFactory;
 import com.automacao.cadastrador_usuarios.ui.Dialogs;
 import com.automacao.cadastrador_usuarios.ui.JanelaStatus;
-import com.automacao.cadastrador_usuarios.ui.StepGuard;
-import com.automacao.cadastrador_usuarios.ui.VinculoDialogs;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -34,8 +29,6 @@ public class Runner {
 
         int escolhaEstado = dialogs.escolherEstado();
         if (escolhaEstado < 0) System.exit(0);
-
-        BaseState base = escolhaEstado == 0 ? BaseState.SP : BaseState.RJ;
 
         String usuarioLogin = escolhaEstado == 0 ? "suporte_sp@cury.net" : "suporte_rj@cury.net";
         String senhaLogin = escolhaEstado == 0 ? "SpSuporte@69" : "RjSuporte@69";
@@ -67,7 +60,7 @@ public class Runner {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(25));
         List<Map<String, String>> listaRelatorio = new ArrayList<>();
 
-        CadastroPageFlow flow = new CadastroPageFlow(dialogs);
+        CadastroPage flow = new CadastroPage(dialogs);
 
         try {
             status.atualizar("Login...");
@@ -170,75 +163,6 @@ public class Runner {
             }
 
             status.setVisible(false);
-
-            FilialObrasCatalog catalog = new FilialObrasCatalog();
-            VinculoDialogs vinculoUI = new VinculoDialogs();
-
-            List<FilialObrasCatalog.Filial> filiais = catalog.filiais(base);
-
-            for (Map<String, String> row : listaRelatorio) {
-                String nome = row.getOrDefault("nome", "");
-
-                VinculoDialogs.VinculoPlan plan = vinculoUI.escolherFilialEObras(
-                        nome,
-                        filiais,
-                        List.of()
-                );
-
-                if (plan == null) break;
-
-                row.put("filial_vinculo", plan.filialCode());
-                row.put("obras_vinculo", String.join("|", plan.obras()));
-                row.put("status_vinculo", "PLANEJADO");
-            }
-
-            int modoVinculo = dialogs.escolherModoVinculo();
-
-            if (modoVinculo == 1) {
-                for (Map<String, String> row : listaRelatorio) {
-                    row.putIfAbsent("status_vinculo", "MANUAL");
-                }
-            } else if (modoVinculo == 2) {
-                for (Map<String, String> row : listaRelatorio) {
-                    row.putIfAbsent("status_vinculo", "PULADO");
-                }
-            } else {
-                int passo = dialogs.confirmarSimNao("Deseja fazer o vínculo em modo passo-a-passo (com OK em cada etapa)?", "Modo passo-a-passo");
-                StepGuard steps = new StepGuard(passo == JOptionPane.YES_OPTION);
-
-                VinculoObrasFlow vinculoFlow = new VinculoObrasFlow();
-
-                vinculoFlow.abrirObras(driver, wait, steps);
-
-                for (Map<String, String> row : listaRelatorio) {
-                    String nome = row.getOrDefault("nome", "").trim();
-                    String obrasKey = row.getOrDefault("obras_vinculo", "").trim();
-                    if (nome.isEmpty() || obrasKey.isEmpty()) {
-                        row.put("status_vinculo", "SEM_OBRAS");
-                        continue;
-                    }
-
-                    List<String> obras = new ArrayList<>();
-                    for (String s : obrasKey.split("\\|")) {
-                        String t = s == null ? "" : s.trim();
-                        if (!t.isEmpty()) obras.add(t);
-                    }
-
-                    try {
-                        for (String obra : obras) {
-                            vinculoFlow.buscarObra(driver, wait, steps, obra);
-                            vinculoFlow.abrirEditarDaObra(driver, wait, steps, obra);
-                            vinculoFlow.irAbaUsuarios(driver, wait, steps);
-                            vinculoFlow.vincularUsuario(driver, wait, steps, nome);
-                            vinculoFlow.voltarParaGeral(driver, wait, steps);
-                            vinculoFlow.salvarNaAbaGeral(driver, wait, steps);
-                        }
-                        row.put("status_vinculo", "VINCULADO");
-                    } catch (Exception e) {
-                        row.put("status_vinculo", "FALHA_VINCULO: " + e.getMessage());
-                    }
-                }
-            }
 
             String path = report.gerarRelatorioDetalhado(listaRelatorio);
             dialogs.info("Finalizado:\n" + path);

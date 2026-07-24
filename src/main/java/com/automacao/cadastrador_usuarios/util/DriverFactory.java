@@ -1,4 +1,4 @@
-package com.automacao.cadastrador_usuarios.selenium;
+package com.automacao.cadastrador_usuarios.util;
 
 import org.openqa.selenium.PageLoadStrategy;
 import org.openqa.selenium.WebDriver;

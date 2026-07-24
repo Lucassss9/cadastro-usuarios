@@ -1,4 +1,4 @@
-package com.automacao.cadastrador_usuarios.infra;
+package com.automacao.cadastrador_usuarios.util;
 
 import java.io.FileWriter;
 import java.time.LocalDateTime;
