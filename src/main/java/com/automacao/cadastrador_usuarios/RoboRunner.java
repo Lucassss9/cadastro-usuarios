@@ -72,6 +72,13 @@ public class RoboRunner {
                     System.out.println("    obs: " + item.get("observacao"));
 
                 try {
+                    if ("true".equalsIgnoreCase(item.get("ja_tem_acesso"))) {
+                        System.out.println("  PULADO: já tem acesso, é só vincular (manual).");
+                        api.atualizarStatus(id, "cadastrado", null);
+                        falhou++;
+                        continue;
+                    }
+
                     String perfil = PerfilResolver.resolver(
                             item.get("funcao"),
                             "true".equalsIgnoreCase(item.get("terceirizado")));

@@ -79,6 +79,7 @@ public class ApiClient {
             dados.put("obra", obras.isEmpty() ? texto(item, "obra") : obras.get(0));
             dados.put("obras_todas", String.join(" ; ", obras));
             dados.put("observacao", texto(item, "observacao"));
+            dados.put("ja_tem_acesso", String.valueOf(item.path("ja_tem_acesso").asBoolean(false)));
             dados.put("cpf", texto(item, "cpf"));
             dados.put("terceirizado", String.valueOf(item.path("terceirizado").asBoolean(false)));
             fila.add(dados);
