@@ -175,7 +175,7 @@ public class CadastroPage {
             lista = Arrays.asList("conversor-de-unidades", "equipments", "equipamentos-em-uso",
                     "equipamentos-ociosos", "estoque", "kit-insumo", "orders", "pedido", "relatorio",
                     "requisicoes-equipamentos", "requisicao", "retorno-equipamentos", "epi");
-        } else if (tipo.contains("ESTAGIÁRIO")) {
+        } else if (tipo.contains("Engenheiro")) {
             lista = Arrays.asList("conversor-de-unidades", "equipments", "equipamentos-em-uso",
                     "equipamentos-ociosos", "estoque", "estoque_mínimo", "kit-insumo", "orders",
                     "pedido", "relatorio", "requisicoes-equipamentos", "requisicao",

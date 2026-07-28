@@ -5,7 +5,6 @@ import com.automacao.cadastrador_usuarios.ui.Dialogs;
 import com.automacao.cadastrador_usuarios.util.ApiClient;
 import com.automacao.cadastrador_usuarios.util.DriverFactory;
 import com.automacao.cadastrador_usuarios.util.ModalClose;
-import com.automacao.cadastrador_usuarios.util.PerfilResolver;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -79,17 +78,15 @@ public class RoboRunner {
                         continue;
                     }
 
-                    String perfil = PerfilResolver.resolver(
-                            item.get("funcao"),
-                            "true".equalsIgnoreCase(item.get("terceirizado")));
-
-                    if (perfil == null) {
-                        String msg = "Sem regra de permissao para o cargo '" + item.get("funcao") + "'";
+                    String perfil = item.get("perfil");
+                    if (perfil == null || perfil.isBlank()) {
+                        String msg = "Sem perfil definido (o admin precisa escolher ao aprovar)";
                         System.out.println("  PULADO: " + msg);
                         api.atualizarStatus(id, "erro", msg);
                         falhou++;
                         continue;
                     }
+                    System.out.println("  perfil: " + perfil);
 
                     api.atualizarStatus(id, "processando", null);
 
