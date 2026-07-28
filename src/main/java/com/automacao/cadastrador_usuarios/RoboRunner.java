@@ -2,13 +2,18 @@ package com.automacao.cadastrador_usuarios.app;
 
 import com.automacao.cadastrador_usuarios.page.CadastroPage;
 import com.automacao.cadastrador_usuarios.ui.Dialogs;
+import com.automacao.cadastrador_usuarios.ui.JanelaStatus;
 import com.automacao.cadastrador_usuarios.util.ApiClient;
 import com.automacao.cadastrador_usuarios.util.DriverFactory;
 import com.automacao.cadastrador_usuarios.util.ModalClose;
+import com.automacao.cadastrador_usuarios.util.ReportService;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,8 +28,6 @@ public class RoboRunner {
     private static final String LOGIN_RJ = env("CF_LOGIN_RJ", "");
     private static final String SENHA_RJ = env("CF_SENHA_RJ", "");
 
-    private static final boolean MODO_TESTE = !"false".equalsIgnoreCase(env("MODO_TESTE", "true"));
-
     public static void main(String[] args) {
         if (ADMIN_EMAIL.isBlank() || ADMIN_SENHA.isBlank()) {
             System.out.println("Configure CFOBRAS_ADMIN_EMAIL e CFOBRAS_ADMIN_SENHA antes de rodar.");
@@ -32,29 +35,33 @@ public class RoboRunner {
         }
 
         ApiClient api = new ApiClient(URL_BACKEND);
+        Dialogs dialogs = new Dialogs();
+        ReportService report = new ReportService();
         List<Map<String, String>> fila;
 
         try {
             api.login(ADMIN_EMAIL, ADMIN_SENHA);
             fila = api.buscarPendentes();
         } catch (Exception e) {
-            System.out.println("Nao consegui falar com o backend: " + e.getMessage());
+            dialogs.info("Nao consegui falar com o backend: " + e.getMessage());
             return;
         }
 
         if (fila.isEmpty()) {
-            System.out.println("Nada na fila. Nenhum cadastro aprovado esperando.");
+            dialogs.info("Nada na fila. Nenhum cadastro aprovado esperando.");
             return;
         }
 
-        System.out.println(fila.size() + " cadastro(s) na fila."
-                + (MODO_TESTE ? "  [MODO TESTE: nao vai salvar]" : "  [VALENDO: vai salvar de verdade]"));
+        JanelaStatus status = new JanelaStatus();
+        status.setVisible(true);
+        status.atualizar("Abrindo navegador...");
 
         WebDriver driver = new DriverFactory().createChrome();
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(25));
-        CadastroPage pagina = new CadastroPage(new Dialogs());
+        CadastroPage pagina = new CadastroPage(dialogs);
         ModalClose modal = new ModalClose();
 
+        List<Map<String, String>> relatorio = new ArrayList<>();
         String estadoLogado = null;
         int ok = 0;
         int falhou = 0;
@@ -63,17 +70,14 @@ public class RoboRunner {
             for (Map<String, String> item : fila) {
                 String id = item.get("id");
                 String nome = item.get("nome");
-                System.out.println("");
-                System.out.println("--- " + nome + " (id " + id + ")");
-                if (item.get("obras_todas") != null && !item.get("obras_todas").isBlank())
-                    System.out.println("    obras: " + item.get("obras_todas"));
-                if (item.get("observacao") != null && !item.get("observacao").isBlank())
-                    System.out.println("    obs: " + item.get("observacao"));
+                item.put("data_hora", LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")));
+                status.atualizar("Processando: " + nome);
 
                 try {
                     if ("true".equalsIgnoreCase(item.get("ja_tem_acesso"))) {
-                        System.out.println("  PULADO: já tem acesso, é só vincular (manual).");
+                        item.put("status_cadastro", "SO VINCULO (ja tem acesso)");
                         api.atualizarStatus(id, "cadastrado", null);
+                        relatorio.add(item);
                         falhou++;
                         continue;
                     }
@@ -81,64 +85,75 @@ public class RoboRunner {
                     String perfil = item.get("perfil");
                     if (perfil == null || perfil.isBlank()) {
                         String msg = "Sem perfil definido (o admin precisa escolher ao aprovar)";
-                        System.out.println("  PULADO: " + msg);
+                        item.put("status_cadastro", "FALHA: " + msg);
                         api.atualizarStatus(id, "erro", msg);
+                        relatorio.add(item);
                         falhou++;
                         continue;
                     }
-                    System.out.println("  perfil: " + perfil);
-
-                    api.atualizarStatus(id, "processando", null);
 
                     String estado = item.get("estado");
                     if (!estado.equals(estadoLogado)) {
-                        System.out.println("  Entrando no CF Obras como " + estado + "...");
+                        status.atualizar("Entrando no CF Obras como " + estado + "...");
                         entrar(pagina, modal, driver, wait, estado);
                         estadoLogado = estado;
                     }
 
                     pagina.garantirAbaUsuarios(driver);
-                    pagina.selecionarObra(driver, wait, item.get("obra"));
 
-                    item.put("perfil", perfil);
+                    String todas = item.get("obras_todas");
+                    if (todas != null && !todas.isBlank()) {
+                        for (String umaObra : todas.split(" ; ")) {
+                            pagina.selecionarObra(driver, wait, umaObra.trim());
+                        }
+                    } else {
+                        pagina.selecionarObra(driver, wait, item.get("obra"));
+                    }
+
                     pagina.preencherCamposBasicos(driver, wait, item);
                     pagina.selecionarPerfil(driver, perfil);
                     pagina.marcarPermissoes(driver, perfil);
 
-                    if (MODO_TESTE) {
-                        System.out.println("  Preenchido (nao salvo). Confira na tela.");
-                        Thread.sleep(4000);
-                        api.atualizarStatus(id, "erro", "Modo teste: preenchido mas nao salvo");
-                        falhou++;
-                        continue;
-                    }
+                    status.setVisible(false);
+                    int acao = dialogs.validarCadastro(item);
+                    status.setVisible(true);
 
-                    pagina.clicarSalvar(driver, wait);
-                    Thread.sleep(2000);
-
-                    String erroNaTela = pagina.verificarErroNaTela(driver);
-                    if (erroNaTela != null) {
-                        System.out.println("  ERRO do site: " + erroNaTela);
-                        api.atualizarStatus(id, "erro", erroNaTela);
-                        falhou++;
-                    } else {
-                        System.out.println("  Cadastrado.");
+                    if (acao == 0) {
+                        pagina.clicarSalvar(driver, wait);
+                        Thread.sleep(1500);
+                        String erroTela = pagina.verificarErroNaTela(driver);
+                        if (erroTela != null) {
+                            item.put("status_cadastro", "FALHA: " + erroTela);
+                            api.atualizarStatus(id, "erro", erroTela);
+                            falhou++;
+                        } else {
+                            item.put("status_cadastro", "SUCESSO");
+                            api.atualizarStatus(id, "cadastrado", null);
+                            ok++;
+                        }
+                    } else if (acao == 1) {
+                        item.put("status_cadastro", "SALVO MANUALMENTE");
                         api.atualizarStatus(id, "cadastrado", null);
                         ok++;
+                    } else {
+                        item.put("status_cadastro", "NAO SALVO");
+                        api.atualizarStatus(id, "erro", "Conferido mas nao salvo pelo admin");
+                        falhou++;
                     }
 
+                    relatorio.add(item);
                     driver.navigate().refresh();
                     Thread.sleep(2000);
                     prepararTela(pagina, modal, driver, wait);
 
                 } catch (Exception e) {
-                    System.out.println("  FALHOU: " + e);
+                    item.put("status_cadastro", "ERRO: " + e.getMessage());
+                    relatorio.add(item);
                     try {
                         api.atualizarStatus(id, "erro", String.valueOf(e.getMessage()));
                     } catch (Exception ignorado) {
                     }
                     falhou++;
-
                     try {
                         driver.navigate().refresh();
                         Thread.sleep(2000);
@@ -148,8 +163,9 @@ public class RoboRunner {
                 }
             }
         } finally {
-            System.out.println("");
-            System.out.println("===== fim: " + ok + " ok, " + falhou + " com problema =====");
+            status.setVisible(false);
+            String caminho = report.gerarRelatorioDetalhado(relatorio);
+            dialogs.info("Finalizado: " + ok + " ok, " + falhou + " com problema.\nRelatorio: " + caminho);
             try {
                 driver.quit();
             } catch (Exception ignorado) {
