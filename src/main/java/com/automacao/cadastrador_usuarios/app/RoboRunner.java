@@ -92,6 +92,11 @@ public class RoboRunner {
                         continue;
                     }
 
+                    try {
+                        api.atualizarStatus(id, "processando", null);
+                    } catch (Exception ignorado) {
+                    }
+
                     String estado = item.get("estado");
                     if (!estado.equals(estadoLogado)) {
                         status.atualizar("Entrando no CF Obras como " + estado + "...");
@@ -135,7 +140,7 @@ public class RoboRunner {
                         Thread.sleep(2000);
 
                         if (pagina.jaExiste(driver)) {
-                            item.put("status_cadastro", "JA EXISTE (falta vincular)");
+                            item.put("status_cadastro", "JA EXISTE (falta vincular na mao)");
                             api.atualizarStatus(id, "erro", "Pessoa ja tem cadastro no CF Obras - falta so vincular");
                             falhou++;
                             relatorio.add(item);

@@ -81,6 +81,7 @@ public class ApiClient {
             dados.put("observacao", texto(item, "observacao"));
             dados.put("ja_tem_acesso", String.valueOf(item.path("ja_tem_acesso").asBoolean(false)));
             dados.put("perfil", texto(item, "perfil"));
+            dados.put("senha_padrao", texto(item, "senha_padrao"));
             dados.put("cpf", texto(item, "cpf"));
             dados.put("terceirizado", String.valueOf(item.path("terceirizado").asBoolean(false)));
             fila.add(dados);

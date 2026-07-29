@@ -95,8 +95,24 @@ public class CadastroPage {
 
                 if (opc == null) {
                     tentarBuscarNoInput(driver, codigo);
-                    Thread.sleep(600);
+                    Thread.sleep(800);
                     opc = acharOpcao(driver, alvo, codigo);
+                }
+
+                if (opc == null) {
+                    // tenta buscar por uma palavra do nome (evita o "criar tag" do codigo puro)
+                    String palavraNome = palavraDoNome(alvo);
+                    if (!palavraNome.isBlank()) {
+                        tentarBuscarNoInput(driver, palavraNome);
+                        Thread.sleep(800);
+                        opc = acharOpcao(driver, alvo, codigo);
+                    }
+                }
+
+                if (opc == null) {
+                    limparBusca(driver);
+                    Thread.sleep(400);
+                    opc = rolarListaProcurando(driver, alvo, codigo);
                 }
 
                 if (opc != null) {
@@ -130,15 +146,53 @@ public class CadastroPage {
         return false;
     }
 
+    private String palavraDoNome(String obra) {
+        if (obra == null) return "";
+        int traco = obra.indexOf('-');
+        if (traco < 0 || traco + 1 >= obra.length()) return "";
+        String nome = obra.substring(traco + 1).trim();
+        String[] palavras = nome.split("\\s+");
+        for (String p : palavras) {
+            if (p.length() >= 4) return p;
+        }
+        return palavras.length > 0 ? palavras[0] : "";
+    }
+
+    private WebElement rolarListaProcurando(WebDriver driver, String alvo, String codigo) {
+        try {
+            WebElement wrapper = driver.findElement(By.cssSelector(".multiselect__content-wrapper"));
+            long alturaTotal = ((Number) ((JavascriptExecutor) driver).executeScript(
+                    "return arguments[0].scrollHeight;", wrapper)).longValue();
+            long passo = 200;
+            for (long y = 0; y <= alturaTotal + passo; y += passo) {
+                ((JavascriptExecutor) driver).executeScript("arguments[0].scrollTop = arguments[1];", wrapper, y);
+                Thread.sleep(150);
+                WebElement achou = acharOpcao(driver, alvo, codigo);
+                if (achou != null) return achou;
+            }
+        } catch (Exception e) {
+            System.out.println("Erro ao rolar a lista de filiais: " + e.getClass().getSimpleName());
+        }
+        return null;
+    }
+
     private WebElement acharOpcao(WebDriver driver, String alvo, String codigo) {
         String alvoUm = alvo.replaceAll("\\s+", " ");
         for (WebElement el : driver.findElements(By.cssSelector(
                 "li.multiselect__element span.multiselect__option"))) {
             String texto = el.getText() == null ? "" : el.getText().trim();
+
+            // ignora a opcao "criar tag" (aparece quando o texto digitado nao e uma obra existente)
+            if (texto.toLowerCase().contains("press enter")
+                    || texto.toLowerCase().contains("create a tag")
+                    || texto.toLowerCase().contains("criar")) {
+                continue;
+            }
+
             String textoUm = texto.replaceAll("\\s+", " ");
-            if (textoUm.equalsIgnoreCase(alvoUm)
-                    || texto.startsWith(codigo + " ")
-                    || texto.equals(codigo)) {
+            // exige que seja a obra REAL: comeca com o codigo E tem mais texto depois (o nome)
+            boolean ehObraReal = texto.startsWith(codigo + " ") && texto.length() > codigo.length() + 1;
+            if (textoUm.equalsIgnoreCase(alvoUm) || ehObraReal) {
                 return el;
             }
         }
@@ -149,8 +203,12 @@ public class CadastroPage {
         try {
             WebElement input = driver.findElement(By.cssSelector("input.multiselect__input"));
             ((JavascriptExecutor) driver).executeScript(
-                    "arguments[0].value=arguments[1];"
-                            + "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));",
+                    "var el=arguments[0], val=arguments[1];"
+                            + "el.focus();"
+                            + "el.value=val;"
+                            + "el.dispatchEvent(new Event('input',{bubbles:true}));"
+                            + "el.dispatchEvent(new Event('keyup',{bubbles:true}));"
+                            + "el.dispatchEvent(new Event('change',{bubbles:true}));",
                     input, codigo);
         } catch (Exception ignorado) {
         }
@@ -199,7 +257,9 @@ public class CadastroPage {
 
         preencher(driver, wait, "//input[@placeholder='Digite seu nome']", dados.get("nome"), "nome");
         preencher(driver, wait, "//input[@placeholder='Digite seu e-mail']", dados.get("email"), "e-mail");
-        preencher(driver, wait, "//input[@placeholder='Senha']", "123Mudar@", "senha");
+        String senha = dados.get("senha_padrao");
+        if (senha == null || senha.isBlank()) senha = "123Mudar@";
+        preencher(driver, wait, "//input[@placeholder='Senha']", senha, "senha");
 
         selecionarFuncao(driver, dados.get("funcao"));
 
