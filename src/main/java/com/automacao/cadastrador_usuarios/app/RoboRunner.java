@@ -101,18 +101,30 @@ public class RoboRunner {
 
                     pagina.garantirAbaUsuarios(driver);
 
+                    StringBuilder obrasComProblema = new StringBuilder();
                     String todas = item.get("obras_todas");
                     if (todas != null && !todas.isBlank()) {
                         for (String umaObra : todas.split(" ; ")) {
-                            pagina.selecionarObra(driver, wait, umaObra.trim());
+                            boolean achou = pagina.selecionarObra(driver, wait, umaObra.trim());
+                            if (!achou) obrasComProblema.append(umaObra.trim()).append("; ");
                         }
                     } else {
-                        pagina.selecionarObra(driver, wait, item.get("obra"));
+                        boolean achou = pagina.selecionarObra(driver, wait, item.get("obra"));
+                        if (!achou) obrasComProblema.append(item.get("obra")).append("; ");
+                    }
+                    if (obrasComProblema.length() > 0) {
+                        item.put("obras_falha", obrasComProblema.toString());
                     }
 
                     pagina.preencherCamposBasicos(driver, wait, item);
                     pagina.selecionarPerfil(driver, perfil);
                     pagina.marcarPermissoes(driver, perfil);
+
+                    status.atualizar("Conferindo campo por campo...");
+                    String pendencias = pagina.conferirTudo(driver, wait, item);
+                    if (pendencias != null && !pendencias.isBlank()) {
+                        item.put("pendencias", pendencias);
+                    }
 
                     status.setVisible(false);
                     int acao = dialogs.validarCadastro(item);
@@ -120,14 +132,64 @@ public class RoboRunner {
 
                     if (acao == 0) {
                         pagina.clicarSalvar(driver, wait);
-                        Thread.sleep(1500);
-                        String erroTela = pagina.verificarErroNaTela(driver);
-                        if (erroTela != null) {
-                            item.put("status_cadastro", "FALHA: " + erroTela);
-                            api.atualizarStatus(id, "erro", erroTela);
+                        Thread.sleep(2000);
+
+                        if (pagina.jaExiste(driver)) {
+                            item.put("status_cadastro", "JA EXISTE (falta vincular)");
+                            api.atualizarStatus(id, "erro", "Pessoa ja tem cadastro no CF Obras - falta so vincular");
                             falhou++;
-                        } else {
-                            item.put("status_cadastro", "SUCESSO");
+                            relatorio.add(item);
+                            driver.navigate().refresh();
+                            Thread.sleep(2000);
+                            prepararTela(pagina, modal, driver, wait);
+                            continue;
+                        }
+
+                        status.setVisible(false);
+                        boolean deuCerto = dialogs.deuCerto(nome);
+                        status.setVisible(true);
+
+                        while (!deuCerto) {
+                            status.setVisible(false);
+                            int oQueFazer = dialogs.oQueFazerComErro(nome);
+                            status.setVisible(true);
+
+                            if (oQueFazer == 0) {
+                                status.atualizar("Refazendo: " + nome);
+                                driver.navigate().refresh();
+                                Thread.sleep(2000);
+                                prepararTela(pagina, modal, driver, wait);
+                                pagina.garantirAbaUsuarios(driver);
+                                String todasR = item.get("obras_todas");
+                                if (todasR != null && !todasR.isBlank()) {
+                                    for (String uma : todasR.split(" ; ")) pagina.selecionarObra(driver, wait, uma.trim());
+                                } else {
+                                    pagina.selecionarObra(driver, wait, item.get("obra"));
+                                }
+                                pagina.preencherCamposBasicos(driver, wait, item);
+                                pagina.selecionarPerfil(driver, perfil);
+                                pagina.marcarPermissoes(driver, perfil);
+                                pagina.conferirTudo(driver, wait, item);
+                                pagina.clicarSalvar(driver, wait);
+                                Thread.sleep(2000);
+                                status.setVisible(false);
+                                deuCerto = dialogs.deuCerto(nome);
+                                status.setVisible(true);
+                            } else if (oQueFazer == 1) {
+                                item.put("status_cadastro", "SALVO MANUALMENTE (apos erro)");
+                                api.atualizarStatus(id, "cadastrado", null);
+                                ok++;
+                                break;
+                            } else {
+                                item.put("status_cadastro", "PULADO (deu erro)");
+                                api.atualizarStatus(id, "erro", "Deu erro e foi pulado pelo admin");
+                                falhou++;
+                                break;
+                            }
+                        }
+
+                        if (deuCerto) {
+                            item.put("status_cadastro", "SUCESSO (robo salvou)");
                             api.atualizarStatus(id, "cadastrado", null);
                             ok++;
                         }

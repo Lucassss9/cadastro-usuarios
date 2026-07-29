@@ -63,38 +63,135 @@ public class CadastroPage {
         }
     }
 
-    public void selecionarObra(WebDriver driver, WebDriverWait wait, String obra) {
+    /** Abre o multiselect de filiais (uma vez por cadastro). */
+    private void abrirMultiselectFilial(WebDriver driver) throws InterruptedException {
+        if (listaVisivel(driver)) return;   // ja aberta: nao clica de novo (senao fecha)
+        WebElement caixa = driver.findElement(By.cssSelector("div.multiselect"));
+        ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", caixa);
         try {
-            WebElement caixa = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.cssSelector("div.multiselect__tags")));
-            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", caixa);
-            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", caixa);
-            Thread.sleep(300);
-
-            WebElement input = null;
-            try {
-                input = caixa.findElement(By.cssSelector("input[type='text'], input.multiselect__input"));
-            } catch (Exception ignorado) {
-            }
-
-            if (input != null) {
-                input.clear();
-                input.sendKeys(obra);
-                Thread.sleep(600);
-                try {
-                    WebElement opc = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(
-                            "//span[contains(@class,'multiselect__option')]//span[contains(text(),'" + obra + "')]")));
-                    ((JavascriptExecutor) driver).executeScript("arguments[0].click();", opc);
-                } catch (Exception ex) {
-                    WebElement primeira = driver.findElement(By.cssSelector(
-                            ".multiselect__content-wrapper li:first-child span.multiselect__option"));
-                    ((JavascriptExecutor) driver).executeScript("arguments[0].click();", primeira);
-                }
-                Thread.sleep(200);
-            }
+            WebElement seta = caixa.findElement(By.cssSelector("div.multiselect__select"));
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", seta);
         } catch (Exception e) {
-            System.out.println("Obra '" + obra + "' nao encontrada: " + e);
+            WebElement tags = caixa.findElement(By.cssSelector("div.multiselect__tags"));
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", tags);
         }
+        Thread.sleep(500);
+    }
+
+    /**
+     * Seleciona UMA obra no multiselect. Pode ser chamado várias vezes (multi-filial).
+     * A lista fica aberta entre chamadas; só reabre se tiver fechado.
+     */
+    public boolean selecionarObra(WebDriver driver, WebDriverWait wait, String obra) {
+        String alvo = obra == null ? "" : obra.trim();
+        String codigo = primeiraParte(alvo);
+
+        for (int tentativa = 1; tentativa <= 5; tentativa++) {
+            try {
+                abrirMultiselectFilial(driver);
+                Thread.sleep(600);
+
+                WebElement opc = acharOpcao(driver, alvo, codigo);
+
+                if (opc == null) {
+                    tentarBuscarNoInput(driver, codigo);
+                    Thread.sleep(600);
+                    opc = acharOpcao(driver, alvo, codigo);
+                }
+
+                if (opc != null) {
+                    ((JavascriptExecutor) driver).executeScript(
+                            "arguments[0].scrollIntoView({block:'center'});", opc);
+                    Thread.sleep(200);
+                    try {
+                        opc.click();
+                    } catch (Exception cliqueNormalFalhou) {
+                        ((JavascriptExecutor) driver).executeScript("arguments[0].click();", opc);
+                    }
+                    Thread.sleep(600);
+
+                    if (obraFoiMarcada(driver, codigo)) {
+                        limparBusca(driver);
+                        return true;
+                    }
+                }
+
+                System.out.println("Obra '" + obra + "' - tentativa " + tentativa + " sem sucesso, repetindo...");
+                Thread.sleep(1000);
+
+            } catch (Exception e) {
+                System.out.println("Obra '" + obra + "' - tentativa " + tentativa
+                        + ": " + e.getClass().getSimpleName());
+                try { Thread.sleep(1000); } catch (Exception ig) {}
+            }
+        }
+
+        System.out.println("Obra '" + obra + "' nao foi selecionada apos 5 tentativas.");
+        return false;
+    }
+
+    private WebElement acharOpcao(WebDriver driver, String alvo, String codigo) {
+        String alvoUm = alvo.replaceAll("\\s+", " ");
+        for (WebElement el : driver.findElements(By.cssSelector(
+                "li.multiselect__element span.multiselect__option"))) {
+            String texto = el.getText() == null ? "" : el.getText().trim();
+            String textoUm = texto.replaceAll("\\s+", " ");
+            if (textoUm.equalsIgnoreCase(alvoUm)
+                    || texto.startsWith(codigo + " ")
+                    || texto.equals(codigo)) {
+                return el;
+            }
+        }
+        return null;
+    }
+
+    private void tentarBuscarNoInput(WebDriver driver, String codigo) {
+        try {
+            WebElement input = driver.findElement(By.cssSelector("input.multiselect__input"));
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].value=arguments[1];"
+                            + "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));",
+                    input, codigo);
+        } catch (Exception ignorado) {
+        }
+    }
+
+    private void limparBusca(WebDriver driver) {
+        try {
+            WebElement input = driver.findElement(By.cssSelector("input.multiselect__input"));
+            ((JavascriptExecutor) driver).executeScript(
+                    "arguments[0].value='';"
+                            + "arguments[0].dispatchEvent(new Event('input',{bubbles:true}));", input);
+        } catch (Exception ignorado) {
+        }
+    }
+
+    private boolean obraFoiMarcada(WebDriver driver, String codigo) {
+        try {
+            for (WebElement tag : driver.findElements(By.cssSelector(
+                    ".multiselect__tags-wrap .multiselect__tag, span.multiselect__tag"))) {
+                String texto = tag.getText() == null ? "" : tag.getText();
+                if (texto.contains(codigo)) return true;
+            }
+        } catch (Exception ignorado) {
+        }
+        return false;
+    }
+
+    private boolean listaVisivel(WebDriver driver) {
+        try {
+            WebElement wrap = driver.findElement(By.cssSelector(".multiselect__content-wrapper"));
+            return wrap.isDisplayed();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Pega o código da obra (ex.: "CCISA118") para casar mesmo com espaçamento estranho. */
+    private String primeiraParte(String obra) {
+        if (obra == null || obra.isBlank()) return "";
+        String[] p = obra.trim().split("\\s+");
+        return p.length > 0 ? p[0] : obra.trim();
     }
 
     public void preencherCamposBasicos(WebDriver driver, WebDriverWait wait, Map<String, String> dados) {
@@ -107,25 +204,140 @@ public class CadastroPage {
         selecionarFuncao(driver, dados.get("funcao"));
 
         if (!terceirizado) {
-            try {
-                WebElement cpf = driver.findElement(By.id("input-cpf"));
-                cpf.clear();
-                cpf.sendKeys(dados.get("cpf"));
-            } catch (Exception e) {
-                System.out.println("Erro no campo CPF: " + e);
+            String valorCpf = dados.get("cpf");
+            if (valorCpf == null || valorCpf.isBlank()) {
+                System.out.println("ATENCAO: solicitacao sem CPF; campo ficou vazio.");
+            } else {
+                preencherPorId(driver, wait, "input-cpf", valorCpf, "CPF");
             }
+        }
+    }
+
+    private void preencherPorId(WebDriver driver, WebDriverWait wait, String id, String valor, String nome) {
+        if (valor == null) return;
+        for (int t = 1; t <= 5; t++) {
+            try {
+                WebElement campo = wait.until(ExpectedConditions.elementToBeClickable(By.id(id)));
+                ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", campo);
+                campo.clear();
+                campo.sendKeys(valor);
+                if (valor.equals(campo.getAttribute("value"))) return;
+            } catch (Exception e) {
+                try { Thread.sleep(800); } catch (Exception ig) {}
+            }
+        }
+        System.out.println("Nao consegui preencher " + nome + " apos 5 tentativas.");
+    }
+
+    /**
+     * Relê cada campo na tela e devolve a lista do que NAO ficou certo.
+     * Vazio = tudo conferido. Tenta corrigir o que faltou antes de reportar.
+     */
+    public String conferirTudo(WebDriver driver, WebDriverWait wait, Map<String, String> dados) {
+        StringBuilder pendencias = new StringBuilder();
+        boolean terceirizado = "true".equalsIgnoreCase(dados.get("terceirizado"));
+
+        conferirCampo(driver, wait, "//input[@placeholder='Digite seu nome']", null,
+                dados.get("nome"), "Nome", pendencias);
+        conferirCampo(driver, wait, "//input[@placeholder='Digite seu e-mail']", null,
+                dados.get("email"), "E-mail", pendencias);
+        conferirCampo(driver, wait, null, "input-cpf",
+                terceirizado ? null : dados.get("cpf"), "CPF", pendencias);
+
+        String funcao = dados.get("funcao");
+        if (funcao != null && !funcao.isBlank()) {
+            if (!funcaoEstaSelecionada(driver, funcao)) {
+                selecionarFuncao(driver, funcao);
+                if (!funcaoEstaSelecionada(driver, funcao)) {
+                    pendencias.append("- Funcao '").append(funcao).append("' nao selecionou\n");
+                }
+            }
+        }
+
+        String perfil = dados.get("perfil");
+        if (perfil != null && !perfil.isBlank()) {
+            if (!perfilEstaMarcado(driver, perfil)) {
+                selecionarPerfil(driver, perfil);
+                marcarPermissoes(driver, perfil);
+                if (!perfilEstaMarcado(driver, perfil)) {
+                    pendencias.append("- Perfil '").append(perfil).append("' nao marcou\n");
+                }
+            }
+        }
+
+        String obras = dados.getOrDefault("obras_todas", dados.get("obra"));
+        if (obras != null && !obras.isBlank()) {
+            for (String uma : obras.split(" ; ")) {
+                String cod = primeiraParte(uma.trim());
+                if (!obraFoiMarcada(driver, cod)) {
+                    selecionarObra(driver, wait, uma.trim());
+                    if (!obraFoiMarcada(driver, cod)) {
+                        pendencias.append("- Obra '").append(uma.trim()).append("' nao entrou\n");
+                    }
+                }
+            }
+        }
+
+        return pendencias.toString();
+    }
+
+    private void conferirCampo(WebDriver driver, WebDriverWait wait, String xpath, String id,
+                               String esperado, String nome, StringBuilder pendencias) {
+        if (esperado == null || esperado.isBlank()) return;
+        try {
+            WebElement campo = (id != null)
+                    ? driver.findElement(By.id(id))
+                    : driver.findElement(By.xpath(xpath));
+            String atual = campo.getAttribute("value");
+            if (!esperado.equals(atual)) {
+                if (id != null) preencherPorId(driver, wait, id, esperado, nome);
+                else preencher(driver, wait, xpath, esperado, nome);
+                atual = campo.getAttribute("value");
+                if (!esperado.equals(atual)) {
+                    pendencias.append("- ").append(nome).append(" esta '")
+                            .append(atual).append("', deveria ser '").append(esperado).append("'\n");
+                }
+            }
+        } catch (Exception e) {
+            pendencias.append("- ").append(nome).append(" nao pude conferir\n");
+        }
+    }
+
+    private boolean funcaoEstaSelecionada(WebDriver driver, String funcao) {
+        try {
+            WebElement select = driver.findElement(
+                    By.xpath("//select[option[normalize-space()='Selecione a função']]"));
+            String escolhido = new Select(select).getFirstSelectedOption().getText();
+            return simplificar(escolhido).equals(simplificar(funcao));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean perfilEstaMarcado(WebDriver driver, String tipo) {
+        String value = valorDoPerfil(tipo);
+        if (value.isBlank()) return false;
+        try {
+            return driver.findElement(By.xpath("//input[@value='" + value + "']")).isSelected();
+        } catch (Exception e) {
+            return false;
         }
     }
 
     private void preencher(WebDriver driver, WebDriverWait wait, String xpath, String valor, String nomeDoCampo) {
         if (valor == null) return;
-        try {
-            WebElement campo = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(xpath)));
-            campo.clear();
-            campo.sendKeys(valor);
-        } catch (Exception e) {
-            System.out.println("Erro no campo " + nomeDoCampo + ": " + e);
+        for (int tentativa = 1; tentativa <= 5; tentativa++) {
+            try {
+                WebElement campo = wait.until(ExpectedConditions.elementToBeClickable(By.xpath(xpath)));
+                ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", campo);
+                campo.clear();
+                campo.sendKeys(valor);
+                if (valor.equals(campo.getAttribute("value"))) return;
+            } catch (Exception e) {
+                try { Thread.sleep(800); } catch (Exception ig) {}
+            }
         }
+        System.out.println("Nao consegui preencher o campo " + nomeDoCampo + " apos 5 tentativas.");
     }
 
     public void selecionarFuncao(WebDriver driver, String funcao) {
@@ -133,28 +345,57 @@ public class CadastroPage {
         try {
             WebElement select = driver.findElement(
                     By.xpath("//select[option[normalize-space()='Selecione a função']]"));
-            new Select(select).selectByVisibleText(funcao);
+            Select combo = new Select(select);
+            try {
+                combo.selectByVisibleText(funcao);
+                return;
+            } catch (Exception naoExato) {
+                String alvo = simplificar(funcao);
+                for (WebElement op : combo.getOptions()) {
+                    if (simplificar(op.getText()).equals(alvo)) {
+                        combo.selectByVisibleText(op.getText());
+                        return;
+                    }
+                }
+                System.out.println("ATENCAO: funcao '" + funcao + "' nao existe na lista do CF Obras.");
+            }
         } catch (Exception e) {
-            System.out.println("Erro ao selecionar a funcao '" + funcao + "': " + e);
+            System.out.println("Erro ao selecionar a funcao '" + funcao + "': " + e.getClass().getSimpleName());
         }
+    }
+
+    private String simplificar(String texto) {
+        if (texto == null) return "";
+        String t = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return t.trim().toLowerCase().replaceAll("\\s+", " ");
+    }
+
+    private String valorDoPerfil(String tipo) {
+        if (tipo == null) return "";
+        if (tipo.contains("Equipe de Apoio")) return "engenheiro";
+        if (tipo.equals("Almoxarifado")) return "almoxarifado";
+        if (tipo.equals("Operacional")) return "operacional";
+        if (tipo.equals("Portaria")) return "portaria";
+        if (tipo.equals("Gerencial")) return "administrador";
+        if (tipo.contains("administrador")) return "admGerencial";
+        return "";
     }
 
     public void selecionarPerfil(WebDriver driver, String tipo) {
         if (tipo == null) return;
+        String value = valorDoPerfil(tipo);
 
-        String value = "";
-        if (tipo.contains("Equipe de Apoio")) value = "engenheiro";
-        else if (tipo.equals("Almoxarifado")) value = "almoxarifado";
-        else if (tipo.equals("Operacional")) value = "operacional";
-        else if (tipo.equals("Portaria")) value = "portaria";
-        else if (tipo.equals("Gerencial")) value = "administrador";
-        else if (tipo.contains("administrador")) value = "admGerencial";
-
+        if (value.isBlank()) {
+            System.out.println("ATENCAO: perfil '" + tipo + "' nao reconhecido; nenhum tipo marcado.");
+            return;
+        }
         try {
             WebElement radio = driver.findElement(By.xpath("//input[@value='" + value + "']"));
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block:'center'});", radio);
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", radio);
         } catch (Exception e) {
-            System.out.println("Erro ao selecionar o perfil '" + tipo + "': " + e);
+            System.out.println("Erro ao selecionar o perfil '" + tipo + "': " + e.getClass().getSimpleName());
         }
     }
 
@@ -217,6 +458,49 @@ public class CadastroPage {
             return null;
         }
         return null;
+    }
+
+    public boolean jaExiste(WebDriver driver) {
+        try {
+            org.openqa.selenium.Alert alerta = driver.switchTo().alert();
+            String texto = alerta.getText() == null ? "" : alerta.getText().toLowerCase();
+            boolean duplicado = texto.contains("existe") || texto.contains("cadastrad")
+                    || texto.contains("duplicad") || texto.contains("ja possui");
+            alerta.accept();
+            if (duplicado) return true;
+        } catch (Exception semAlerta) {
+        }
+
+        try {
+            for (WebElement el : driver.findElements(By.xpath(
+                    "//*[contains(text(),'existe') or contains(text(),'cadastrado') "
+                            + "or contains(text(),'já possui') or contains(text(),'duplicad')]"))) {
+                if (el.isDisplayed()) {
+                    String t = el.getText().toLowerCase();
+                    if (t.contains("existe") || t.contains("cadastrad")
+                            || t.contains("possui") || t.contains("duplicad")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignorado) {
+        }
+        return false;
+    }
+
+    public boolean confirmarSalvou(WebDriver driver, String email) {
+        try {
+            Thread.sleep(1500);
+            String fonte = driver.getPageSource();
+            if (email != null && !email.isBlank() && fonte.contains(email)) {
+                return true;
+            }
+            return driver.findElements(By.xpath(
+                    "//*[contains(text(),'sucesso') or contains(text(),'Sucesso') "
+                            + "or contains(text(),'cadastrado') or contains(text(),'salvo')]")).size() > 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void clicarSalvar(WebDriver driver, WebDriverWait wait) {

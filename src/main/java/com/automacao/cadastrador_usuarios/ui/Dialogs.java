@@ -32,14 +32,56 @@ public class Dialogs {
                 "Email: " + dadosAtuais.get("email") + "\n" +
                 "Função: " + dadosAtuais.get("funcao") + "\n" +
                 "CPF: " + dadosAtuais.get("cpf") + "\n" +
-                "Obra: " + dadosAtuais.get("obra") + "\n" +
-                "Perfil: " + dadosAtuais.get("perfil") + "\n\n" +
+                "Obras: " + dadosAtuais.getOrDefault("obras_todas", dadosAtuais.get("obra")) + "\n" +
+                "Perfil: " + dadosAtuais.get("perfil") + "\n" +
+                avisos(dadosAtuais) +
+                pendenciasTexto(dadosAtuais) +
                 "O que deseja fazer?";
 
-        Object[] botoesAcao = {"✅ PODE SALVAR (Robô)", "📝 SALVEI MANUALMENTE", "✏️ CORRIGIR DADOS"};
+        Object[] botoesAcao = {"Robô clica Salvar", "Eu já salvei", "Pular (não salvar)"};
 
-        return JOptionPane.showOptionDialog(null, resumo, "Validação de Cadastro",
+        return JOptionPane.showOptionDialog(null, resumo, "Conferência do Cadastro",
                 JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE, null, botoesAcao, botoesAcao[0]);
+    }
+
+    public boolean deuCerto(String nome) {
+        Object[] opcoes = {"Sim, salvou", "Não / deu erro"};
+        int r = JOptionPane.showOptionDialog(null,
+                "O cadastro de '" + nome + "' foi salvo com sucesso na tela?",
+                "Confirmar salvamento",
+                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, opcoes, opcoes[0]);
+        return r == JOptionPane.YES_OPTION;
+    }
+
+    public int oQueFazerComErro(String nome) {
+        Object[] opcoes = {"Tentar de novo", "Vou resolver na mão", "Pular este"};
+        return JOptionPane.showOptionDialog(null,
+                "Deu problema com '" + nome + "'. O que fazer?",
+                "Deu erro",
+                JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, opcoes, opcoes[0]);
+    }
+
+    private String pendenciasTexto(Map<String, String> d) {
+        String p = d.get("pendencias");
+        if (p == null || p.isBlank()) {
+            return ">> Conferido: todos os campos OK.\n\n";
+        }
+        return ">> CONFERENCIA ENCONTROU PROBLEMAS:\n" + p + "\n";
+    }
+
+    private String avisos(Map<String, String> d) {
+        StringBuilder sb = new StringBuilder();
+        String obrasFalha = d.get("obras_falha");
+        if (obrasFalha != null && !obrasFalha.isBlank()) {
+            sb.append("\n>> ATENCAO: nao achei estas obras na tela: ").append(obrasFalha).append("\n");
+        }
+        boolean terceirizado = "true".equalsIgnoreCase(d.get("terceirizado"));
+        String cpf = d.get("cpf");
+        if (!terceirizado && (cpf == null || cpf.isBlank())) {
+            sb.append(">> ATENCAO: sem CPF nesta solicitacao.\n");
+        }
+        if (sb.length() > 0) sb.append("\n");
+        return sb.toString();
     }
 
     public Map<String, String> coletarDadosUsuario(Map<String, String> dadosExistentes) {
