@@ -226,11 +226,19 @@ public class CadastroPage {
 
     private boolean obraFoiMarcada(WebDriver driver, String codigo) {
         try {
+            String cod = codigo == null ? "" : codigo.trim().toUpperCase();
+            List<String> tagsVistas = new ArrayList<>();
             for (WebElement tag : driver.findElements(By.cssSelector(
                     ".multiselect__tags-wrap .multiselect__tag, span.multiselect__tag"))) {
-                String texto = tag.getText() == null ? "" : tag.getText();
-                if (texto.contains(codigo)) return true;
+                String texto = tag.getText() == null ? "" : tag.getText().trim();
+                if (!texto.isBlank()) tagsVistas.add(texto);
+                String t = texto.toUpperCase();
+                if (!cod.isBlank() && (t.contains(cod)
+                        || t.replaceAll("\\s+", "").contains(cod.replaceAll("\\s+", "")))) {
+                    return true;
+                }
             }
+            System.out.println("      obraFoiMarcada: procurei '" + cod + "' nas tags e nao achei. Tags: " + tagsVistas);
         } catch (Exception ignorado) {
         }
         return false;

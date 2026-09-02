@@ -53,8 +53,16 @@ public class ApiClient {
     }
 
     public List<Map<String, String>> buscarPendentes() throws Exception {
+        return buscarFila("/colaborador/pendentes");
+    }
+
+    public List<Map<String, String>> buscarParaVincular() throws Exception {
+        return buscarFila("/colaborador/para-vincular");
+    }
+
+    private List<Map<String, String>> buscarFila(String caminho) throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(urlBase + "/colaborador/pendentes"))
+                .uri(URI.create(urlBase + caminho))
                 .header("Authorization", "Bearer " + token)
                 .timeout(Duration.ofSeconds(60))
                 .GET()
@@ -79,6 +87,7 @@ public class ApiClient {
             dados.put("obra", obras.isEmpty() ? texto(item, "obra") : obras.get(0));
             dados.put("obras_todas", String.join(" ; ", obras));
             dados.put("observacao", texto(item, "observacao"));
+            dados.put("setor", texto(item, "setor"));
             dados.put("ja_tem_acesso", String.valueOf(item.path("ja_tem_acesso").asBoolean(false)));
             dados.put("perfil", texto(item, "perfil"));
             dados.put("senha_padrao", texto(item, "senha_padrao"));
