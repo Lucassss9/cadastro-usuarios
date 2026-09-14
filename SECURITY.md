@@ -1,21 +1,18 @@
-# Security Policy
+# Política de Segurança
 
-## Supported Versions
+## Sobre este projeto
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Este é um projeto de automação pessoal, mantido por um único desenvolvedor, sem versionamento semântico formal (releases/tags). A branch `master` reflete sempre a versão mais recente e é a única atualmente mantida.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Reportando uma vulnerabilidade
 
-## Reporting a Vulnerability
+Se você encontrar uma vulnerabilidade de segurança neste projeto, por favor:
 
-Use this section to tell people how to report a vulnerability.
+- Abra uma [issue](../../issues) descrevendo o problema, **sem incluir dados sensíveis ou credenciais**, ou
+- Entre em contato diretamente comigo pelo [LinkedIn](https://www.linkedin.com/in/devlucasg/)
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Como este é um projeto mantido individualmente, não há um SLA formal de resposta, mas relatos são levados a sério e analisados assim que possível.
+
+## Escopo
+
+Este projeto interage com sistemas internos de uma empresa (não open source) e consulta dados de funcionários. Nenhuma credencial, dado sensível ou informação pessoal identificável é versionada neste repositório.
